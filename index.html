@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Descarga de adjuntos de Gmail</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📥</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel: #EDF2E7;
+    --papel-2: #E1EADA;
+    --tinta: #17233B;
+    --tinta-suave: #475A50;
+    --linea: #B7CAB6;
+    --margen: #C2453B;
+    --boton-fondo: #17233B;
+    --boton-texto: #F2F6EE;
+    --ok: #2B6A3E;
+    --error: #B3261E;
+    --gutter: 44px;
+    --f-titulo: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --f-texto: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  :root[data-tema="oscuro"] { color-scheme: dark; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --papel: #0F1A15;
+      --papel-2: #16251D;
+      --tinta: #E6EEE2;
+      --tinta-suave: #A3B8AA;
+      --linea: #27392F;
+      --margen: #D9695E;
+      --boton-fondo: #E6EEE2;
+      --boton-texto: #0F1A15;
+      --ok: #7CCB93;
+      --error: #FF8A80;
+    }
+  }
+  @media (max-width: 560px) { :root { --gutter: 34px; } }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--f-texto);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  .sr {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ── Hoja contable: margen rojo doble a la izquierda ── */
+  .hoja {
+    position: relative;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: clamp(28px, 6vw, 72px) 20px 56px 0;
+  }
+  .hoja::before {
+    content: "";
+    position: absolute; top: 0; bottom: 0; left: var(--gutter);
+    width: 4px;
+    border-left: 1px solid var(--margen);
+    border-right: 1px solid var(--margen);
+    pointer-events: none;
+  }
+  .cabecera, .aviso { margin-left: calc(var(--gutter) + 24px); }
+  .cabecera { padding-bottom: 30px; }
+  h1 {
+    margin: 0 0 14px;
+    font-family: var(--f-titulo);
+    font-weight: 800;
+    font-size: clamp(2rem, 6vw, 3.1rem);
+    line-height: 1.04;
+    letter-spacing: -0.025em;
+    max-width: 16ch;
+  }
+  .intro { margin: 0; max-width: 56ch; color: var(--tinta-suave); font-size: 1.05rem; }
+
+  .aviso {
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    border-left: 4px solid var(--error);
+    background: var(--papel-2);
+    max-width: 60ch;
+  }
+
+  /* ── Pasos ── */
+  .paso {
+    display: grid;
+    grid-template-columns: var(--gutter) 1fr;
+    padding: 28px 0 30px;
+    border-top: 1px solid var(--linea);
+  }
+  .num {
+    padding-right: 12px;
+    text-align: right;
+    font-family: var(--f-titulo);
+    font-weight: 800;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .cont { padding-left: 24px; min-width: 0; }
+  h2 {
+    margin: 0 0 6px;
+    font-family: var(--f-titulo);
+    font-weight: 600;
+    font-size: 1.4rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .ayuda { margin: 0 0 16px; color: var(--tinta-suave); max-width: 60ch; font-size: .95rem; }
+  .ayuda.sin-margen { margin-bottom: 0; }
+  .grupo { border: 0; padding: 0; margin: 0 0 18px; min-width: 0; }
+  .etiqueta { display: block; margin: 0 0 8px; font-weight: 600; font-size: .95rem; }
+
+  /* ── Botones ── */
+  .btn {
+    appearance: none;
+    border: 1.5px solid var(--boton-fondo);
+    background: var(--boton-fondo);
+    color: var(--boton-texto);
+    font: 600 1rem/1 var(--f-texto);
+    padding: 14px 22px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.12); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.sec { background: transparent; color: var(--tinta); }
+  .btn.grande { padding: 17px 30px; font-size: 1.08rem; }
+  .enlace {
+    appearance: none; background: none; border: 0; padding: 4px 0; margin-right: 16px;
+    font: 500 .95rem var(--f-texto); color: var(--tinta);
+    text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  }
+  :focus-visible { outline: 3px solid var(--margen); outline-offset: 3px; }
+
+  /* ── Opciones tipo ficha ── */
+  .opciones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { position: relative; }
+  .chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .chip span {
+    display: inline-block; padding: 9px 16px; border: 1.5px solid var(--tinta);
+    border-radius: 4px; font-weight: 500; font-size: .95rem; cursor: pointer;
+  }
+  .chip input:checked + span { background: var(--tinta); color: var(--papel); }
+  .chip input:focus-visible + span { outline: 3px solid var(--margen); outline-offset: 3px; }
+
+  /* ── Campos como renglón de libro ── */
+  .fechas { display: flex; flex-wrap: wrap; gap: 24px; margin: 4px 0 8px; }
+  .campo { display: flex; flex-direction: column; font-weight: 600; font-size: .9rem; gap: 2px; }
+  input[type="date"], input[type="text"] {
+    font: 400 1rem var(--f-texto);
+    color: var(--tinta);
+    background: transparent;
+    border: 0;
+    border-bottom: 1.5px solid var(--tinta);
+    border-radius: 0;
+    padding: 6px 2px;
+    min-width: 11rem;
+    color-scheme: light dark;
+  }
+  input[type="text"] { width: 100%; max-width: 34rem; }
+  input::placeholder { color: var(--tinta-suave); opacity: .8; }
+  details { margin: 0 0 6px; }
+  summary { cursor: pointer; font-weight: 500; font-size: .95rem; padding: 4px 0; }
+  details > div { padding: 8px 0 4px; }
+
+  .destino { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; }
+  .destino input { margin-top: 6px; accent-color: var(--tinta); }
+  .destino label { font-weight: 600; }
+  .destino .sub { display: block; font-weight: 400; color: var(--tinta-suave); font-size: .93rem; }
+  .carpeta-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0 0; }
+  .carpeta-nombre { font-weight: 600; word-break: break-word; }
+
+  .cuenta { margin: 0 0 10px; }
+  .error { color: var(--error); margin: 12px 0 0; font-weight: 500; }
+  .nota { margin: 10px 0 0; font-size: .92rem; color: var(--tinta-suave); max-width: 60ch; }
+
+  /* ── Progreso ── */
+  #progreso { margin-top: 26px; padding-top: 22px; border-top: 1px dotted var(--tinta-suave); }
+  #estado { margin: 0 0 12px; font-weight: 500; }
+  #estado.error { color: var(--error); }
+  #estado.listo { color: var(--ok); }
+  .barra { height: 8px; border: 1.5px solid var(--tinta); border-radius: 2px; overflow: hidden; }
+  .barra > div { height: 100%; width: 0; background: var(--tinta); transition: width .25s ease; }
+  @media (prefers-reduced-motion: reduce) { .barra > div { transition: none; } }
+  #conteo { margin: 8px 0 0; font-size: .92rem; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+
+  /* Totales al estilo contable: raya simple arriba, doble raya abajo */
+  .totales { margin: 22px 0 0; max-width: 380px; }
+  .totales > div {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px dotted var(--linea);
+  }
+  .totales dt { color: var(--tinta-suave); }
+  .totales dd {
+    margin: 0; font-family: var(--f-titulo); font-weight: 600; font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .totales > .suma {
+    margin: 6px 0 10px; padding: 8px 0;
+    border-top: 1.5px solid var(--tinta); border-bottom: 5px double var(--tinta);
+  }
+  .totales > .suma dt { color: var(--tinta); font-weight: 600; }
+  .totales > .suma dd { font-size: 1.75rem; }
+  .totales > .aparte dd { font-size: 1.05rem; }
+  .totales > .con-error dd, .totales > .con-error dt { color: var(--error); }
+
+  #renovar { margin: 16px 0 0; padding: 14px 16px; background: var(--papel-2); border-left: 4px solid var(--margen); }
+  #renovar p { margin: 0 0 10px; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+
+  #log {
+    list-style: none; margin: 10px 0 0; padding: 0; max-height: 260px; overflow: auto;
+    font-size: .88rem; border-top: 1px solid var(--linea);
+  }
+  #log li { padding: 4px 0; border-bottom: 1px dotted var(--linea); overflow-wrap: anywhere; }
+  #log .ok::before { content: "✓ "; color: var(--ok); font-weight: 700; }
+  #log .ya::before { content: "= "; color: var(--tinta-suave); font-weight: 700; }
+  #log .err::before { content: "✕ "; color: var(--error); font-weight: 700; }
+  #log .inf::before { content: "· "; font-weight: 700; }
+
+  .pie {
+    margin: 12px 0 0 calc(var(--gutter) + 24px);
+    padding-top: 22px; border-top: 1px solid var(--linea);
+    font-size: .9rem; color: var(--tinta-suave); max-width: 62ch;
+  }
+  .pie a { color: var(--tinta); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="hoja">
+
+  <header class="cabecera">
+    <h1>Descarga los JSON y PDF de tus correos</h1>
+    <p class="intro">Elige un periodo y esta página guarda en tu computadora los archivos adjuntos de esos correos de Gmail.</p>
+  </header>
+
+  <div id="aviso-config" class="aviso" role="alert" hidden>
+    <strong>Falta configurar la página.</strong> Pega el Client ID de Google en la variable <code>CLIENT_ID</code> dentro del archivo <code>index.html</code> (busca «PEGA_AQUI»).
+  </div>
+
+  <!-- 1 -->
+  <section class="paso" aria-labelledby="t1">
+    <span class="num" aria-hidden="true">1</span>
+    <div class="cont">
+      <h2 id="t1">Conecta tu cuenta de Google</h2>
+      <p class="ayuda">Solo se pide permiso para leer tus correos. No se modifica ni se borra nada.</p>
+      <div id="sin-sesion">
+        <button type="button" id="btn-conectar" class="btn">Conectar con Google</button>
+        <details>
+          <summary>¿Google dice «no ha verificado esta app»?</summary>
+          <div class="nota">Es normal: la página es privada y no está publicada en la tienda de Google. Pulsa <strong>Configuración avanzada</strong> y después <strong>Continuar</strong> (o «Ir a la página»), y marca el permiso de lectura de Gmail.</div>
+        </details>
+      </div>
+      <div id="con-sesion" hidden>
+        <p class="cuenta">Conectado como <strong id="email"></strong></p>
+        <button type="button" id="btn-cambiar" class="enlace">Usar otra cuenta</button>
+        <button type="button" id="btn-salir" class="enlace">Desconectar</button>
+      </div>
+      <p id="msg-conexion" class="error" role="alert" hidden></p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="paso" aria-labelledby="t2">
+    <span class="num" aria-hidden="true">2</span>
+    <div class="cont">
+      <h2 id="t2">Elige qué descargar</h2>
+      <p class="ayuda">Por defecto se toma el mes anterior completo.</p>
+
+      <fieldset class="grupo">
+        <legend class="etiqueta">Periodo</legend>
+        <div class="opciones">
+          <label class="chip"><input type="radio" name="preset" value="mes_anterior" checked><span>Mes anterior</span></label>
+          <label class="chip"><input type="radio" name="preset" value="este_mes"><span>Este mes</span></label>
+          <label class="chip"><input type="radio" name="preset" value="ultimos_30"><span>Últimos 30 días</span></label>
+          <label class="chip"><input type="radio" name="preset" value="custom" id="preset-custom"><span>Fechas exactas</span></label>
+        </div>
+      </fieldset>
+      <div class="fechas">
+        <label class="campo">Desde <input type="date" id="desde"></label>
+        <label class="campo">Hasta <input type="date" id="hasta"></label>
+      </div>
+      <p id="resumen-periodo" class="ayuda"></p>
+
+      <fieldset class="grupo">
+        <legend class="etiqueta">Tipos de archivo</legend>
+        <div class="opciones">
+          <label class="chip"><input type="checkbox" id="t-json" checked><span>JSON</span></label>
+          <label class="chip"><input type="checkbox" id="t-pdf" checked><span>PDF</span></label>
+        </div>
+      </fieldset>
+
+      <details>
+        <summary>Filtrar por remitente o asunto (opcional)</summary>
+        <div>
+          <label class="sr" for="filtro">Filtro de búsqueda</label>
+          <input type="text" id="filtro" placeholder="Ej.: from:facturacion@empresa.com   o   subject:factura" autocomplete="off">
+          <p class="nota">Se usa la misma sintaxis de búsqueda de Gmail. Déjalo vacío para traer todo el periodo.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="paso" aria-labelledby="t3">
+    <span class="num" aria-hidden="true">3</span>
+    <div class="cont">
+      <h2 id="t3">Elige dónde guardar</h2>
+      <div class="destino">
+        <input type="radio" name="destino" id="dest-carpeta" value="carpeta" checked>
+        <label for="dest-carpeta">Guardar en una carpeta de mi computadora
+          <span class="sub">Se crean las subcarpetas JSON y PDF. Si vuelves a descargar, los archivos que ya estén se omiten.</span>
+        </label>
+      </div>
+      <div id="bloque-carpeta" class="carpeta-fila" style="margin:-4px 0 18px 28px">
+        <button type="button" id="btn-carpeta" class="btn sec">Elegir carpeta</button>
+        <span id="carpeta-nombre" class="carpeta-nombre">Ninguna carpeta elegida</span>
+      </div>
+      <p id="nota-carpeta" class="nota" style="margin:-8px 0 18px 28px" hidden></p>
+      <div class="destino">
+        <input type="radio" name="destino" id="dest-zip" value="zip">
+        <label for="dest-zip">Descargar todo en un archivo .zip
+          <span class="sub">Funciona en cualquier navegador. El .zip se guarda en tu carpeta de Descargas.</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="paso" aria-labelledby="t4">
+    <span class="num" aria-hidden="true">4</span>
+    <div class="cont">
+      <h2 id="t4">Descarga</h2>
+      <button type="button" id="btn-iniciar" class="btn grande" disabled>Descargar adjuntos</button>
+      <p id="falta" class="nota"></p>
+
+      <div id="progreso" hidden>
+        <p id="estado" role="status" aria-live="polite"></p>
+        <div class="barra" aria-hidden="true"><div id="barra-relleno"></div></div>
+        <p id="conteo"></p>
+
+        <div id="renovar" hidden>
+          <p><strong>Tu sesión de Google caducó.</strong> Renuévala para que la descarga continúe donde se quedó.</p>
+          <button type="button" id="btn-renovar" class="btn">Renovar sesión</button>
+        </div>
+
+        <dl class="totales">
+          <div><dt>Archivos JSON</dt><dd id="n-json">0</dd></div>
+          <div><dt>Archivos PDF</dt><dd id="n-pdf">0</dd></div>
+          <div class="suma"><dt>Archivos nuevos</dt><dd id="n-total">0</dd></div>
+          <div class="aparte"><dt>Ya existían (omitidos)</dt><dd id="n-omitidos">0</dd></div>
+          <div class="aparte" id="fila-errores"><dt>Con error</dt><dd id="n-errores">0</dd></div>
+        </dl>
+
+        <details>
+          <summary>Ver detalle</summary>
+          <ol id="log"></ol>
+        </details>
+
+        <div class="acciones">
+          <button type="button" id="btn-cancelar" class="btn sec" hidden>Cancelar</button>
+          <a id="btn-zip" class="btn" hidden>Descargar el .zip otra vez</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pie">
+    Todo ocurre en tu navegador: tus correos y archivos no se envían a ningún servidor de esta página. Puedes quitar el acceso cuando quieras en
+    <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.
+    Mantén esta pestaña abierta mientras se descarga.
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="window.__gsiListo && window.__gsiListo()"></script>
+<script>
+(() => {
+'use strict';
+
+/* ══════════════════════════════════════════════════════════
+   CONFIGURACIÓN — lo único que hay que editar
+   ══════════════════════════════════════════════════════════ */
+const CLIENT_ID = 'PEGA_AQUI_TU_CLIENT_ID.apps.googleusercontent.com';
+
+const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const CFG = {
+  pausaLlamadaMs: 120,    // pausa tras cada llamada a la API
+  pausaCorreoMs: 60,      // pausa extra entre correos
+  maxIntentos: 8,         // reintentos por llamada ante cuota o error temporal
+  esperaBaseMs: 5000,     // primera espera (luego 10, 20, 40, 65 s...)
+  esperaMaxMs: 65000,     // tope de espera
+  maxLineasLog: 400,
+};
+
+/* ══════════════════════════════════════════════════════════
+   ESTADO
+   ══════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+const configurado = !CLIENT_ID.startsWith('PEGA_AQUI');
+const puedeCarpeta = typeof window.showDirectoryPicker === 'function';
+
+const S = {
+  token: null, expira: 0, email: '',
+  dir: null,
+  ejecutando: false, cancelar: false,
+  reintentos: 0,
+};
+let tokenClient = null;
+let pendiente = null;
+let wakeLock = null;
+let zipUrl = null;
+
+/* ══════════════════════════════════════════════════════════
+   UTILIDADES
+   ══════════════════════════════════════════════════════════ */
+const pad = (n) => String(n).padStart(2, '0');
+const fmtISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const epoch = (d) => Math.floor(d.getTime() / 1000);
+const fmtLargo = (d) => d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+
+function rangoPreset(p) {
+  const hoy = new Date(), y = hoy.getFullYear(), m = hoy.getMonth();
+  if (p === 'mes_anterior') return [new Date(y, m - 1, 1), new Date(y, m, 0)];
+  if (p === 'este_mes') return [new Date(y, m, 1), hoy];
+  if (p === 'ultimos_30') return [new Date(y, m, hoy.getDate() - 29), hoy];
+  return null;
+}
+
+function limpiarNombre(n) {
+  let s = String(n || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/[. ]+$/g, '').trim();
+  if (s.length > 150) { const ext = (s.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0]; s = s.slice(0, 150 - ext.length) + ext; }
+  return s || 'archivo';
+}
+function partirNombre(n) {
+  const m = n.match(/^(.*?)(\.[A-Za-z0-9]{1,8})$/);
+  return m ? [m[1], m[2]] : [n, ''];
+}
+function variante(n, msgId) {
+  const [b, e] = partirNombre(n);
+  return `${b}_${String(msgId).slice(-6)}${e}`;
+}
+function b64urlABytes(s) {
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function dormir(ms) {
+  const fin = Date.now() + ms;
+  while (Date.now() < fin) {
+    if (S.cancelar) throw new Error('cancelado');
+    await new Promise((r) => setTimeout(r, Math.min(250, Math.max(0, fin - Date.now()))));
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   INTERFAZ
+   ══════════════════════════════════════════════════════════ */
+function modoDestino() { return document.querySelector('input[name="destino"]:checked').value; }
+function periodoValido() {
+  const a = $('desde').value, b = $('hasta').value;
+  return !!a && !!b && parseISO(a) <= parseISO(b);
+}
+function setEstado(texto, clase) {
+  const el = $('estado');
+  el.textContent = texto;
+  el.className = clase || '';
+}
+function setError(el, texto) {
+  el.textContent = texto || '';
+  el.hidden = !texto;
+}
+function log(tipo, texto) {
+  const ol = $('log');
+  const li = document.createElement('li');
+  li.className = tipo;
+  li.textContent = texto;
+  ol.appendChild(li);
+  while (ol.children.length > CFG.maxLineasLog) ol.removeChild(ol.firstChild);
+  ol.scrollTop = ol.scrollHeight;
+}
+function aplicarPreset() {
+  const p = document.querySelector('input[name="preset"]:checked').value;
+  const r = rangoPreset(p);
+  if (r) { $('desde').value = fmtISO(r[0]); $('hasta').value = fmtISO(r[1]); }
+  actualizarResumen();
+}
+function actualizarResumen() {
+  const el = $('resumen-periodo');
+  if (!$('desde').value || !$('hasta').value) { el.textContent = 'Elige las dos fechas.'; }
+  else if (!periodoValido()) { el.textContent = 'La fecha «Hasta» no puede ser anterior a «Desde».'; }
+  else { el.textContent = `Se buscarán correos del ${fmtLargo(parseISO($('desde').value))} al ${fmtLargo(parseISO($('hasta').value))}.`; }
+  refrescarBoton();
+}
+function faltante() {
+  if (!configurado) return 'Falta configurar el Client ID de Google (ver el aviso de arriba).';
+  if (!S.token) return 'Conecta tu cuenta de Google para continuar.';
+  if (!$('t-json').checked && !$('t-pdf').checked) return 'Marca al menos un tipo de archivo.';
+  if (!periodoValido()) return 'Revisa las fechas del periodo.';
+  if (modoDestino() === 'carpeta' && !S.dir) return 'Elige la carpeta donde se guardarán los archivos.';
+  return '';
+}
+function refrescarBoton() {
+  const f = faltante();
+  $('btn-iniciar').disabled = !!f || S.ejecutando;
+  $('falta').textContent = S.ejecutando ? '' : f;
+  $('bloque-carpeta').hidden = modoDestino() !== 'carpeta';
+}
+function mostrarSesion() {
+  const con = !!S.token;
+  $('sin-sesion').hidden = con;
+  $('con-sesion').hidden = !con;
+  $('email').textContent = S.email;
+  refrescarBoton();
+}
+function actualizarProgreso(st) {
+  const pct = st.total ? Math.round((st.revisados / st.total) * 100) : 0;
+  $('barra-relleno').style.width = pct + '%';
+  $('conteo').textContent = st.total ? `Correo ${Math.min(st.revisados, st.total)} de ${st.total}` : '';
+  $('n-json').textContent = st.json;
+  $('n-pdf').textContent = st.pdf;
+  $('n-total').textContent = st.json + st.pdf;
+  $('n-omitidos').textContent = st.omitidos;
+  $('n-errores').textContent = st.errores;
+  $('fila-errores').classList.toggle('con-error', st.errores > 0);
+}
+
+/* ══════════════════════════════════════════════════════════
+   AUTENTICACIÓN (Google Identity Services, sin servidor)
+   ══════════════════════════════════════════════════════════ */
+function iniciarGoogle() {
+  if (tokenClient || !configurado || !window.google || !google.accounts) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPE,
+    callback: (r) => {
+      const p = pendiente; pendiente = null;
+      if (!p) return;
+      if (r.error) return p.rej(new Error(r.error_description || r.error));
+      if (!google.accounts.oauth2.hasGrantedAllScopes(r, SCOPE)) {
+        return p.rej(new Error('Falta aceptar el permiso de lectura de Gmail. Vuelve a intentarlo y deja marcada esa casilla.'));
+      }
+      S.token = r.access_token;
+      S.expira = Date.now() + (Number(r.expires_in) || 3600) * 1000;
+      p.res(r);
+    },
+    error_callback: (e) => {
+      const p = pendiente; pendiente = null;
+      if (!p) return;
+      const msg = e && e.type === 'popup_closed' ? 'Cerraste la ventana de Google antes de terminar.'
+        : e && e.type === 'popup_failed_to_open' ? 'El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de esta página e inténtalo de nuevo.'
+        : (e && e.message) || 'No se pudo conectar con Google.';
+      p.rej(new Error(msg));
+    },
+  });
+}
+window.__gsiListo = iniciarGoogle;
+
+function pedirToken(opts) {
+  return new Promise((res, rej) => {
+    iniciarGoogle();
+    if (!tokenClient) return rej(new Error('Todavía carga el inicio de sesión de Google. Espera un momento e inténtalo otra vez.'));
+    pendiente = { res, rej };
+    tokenClient.requestAccessToken(opts);
+  });
+}
+
+async function conectar(prompt) {
+  setError($('msg-conexion'), '');
+  try {
+    await pedirToken({ prompt });
+    const perfil = await gmail('profile');
+    S.email = perfil.emailAddress || '';
+    mostrarSesion();
+  } catch (e) {
+    S.token = null; S.expira = 0; S.email = '';
+    mostrarSesion();
+    setError($('msg-conexion'), e.message);
+  }
+}
+function desconectar() {
+  if (S.token && window.google && google.accounts) google.accounts.oauth2.revoke(S.token, () => {});
+  S.token = null; S.expira = 0; S.email = '';
+  mostrarSesion();
+}
+
+function esperarClic(...botones) {
+  return new Promise((res) => {
+    const fin = () => { botones.forEach((b) => b.removeEventListener('click', fin)); res(); };
+    botones.forEach((b) => b.addEventListener('click', fin));
+  });
+}
+async function asegurarToken() {
+  if (Date.now() < S.expira - 60000) return;
+  $('renovar').hidden = false;
+  setEstado('Tu sesión de Google caducó. Presiona «Renovar sesión» para continuar.');
+  while (Date.now() >= S.expira - 60000) {
+    await esperarClic($('btn-renovar'), $('btn-cancelar'));
+    if (S.cancelar) throw new Error('cancelado');
+    try { await pedirToken({ prompt: '' }); }
+    catch (e) { log('err', 'No se pudo renovar la sesión: ' + e.message); }
+  }
+  $('renovar').hidden = true;
+  setEstado('Sesión renovada. Continuando…');
+}
+
+/* ══════════════════════════════════════════════════════════
+   GMAIL API con reintentos por cuota
+   ══════════════════════════════════════════════════════════ */
+async function esCuota(r) {
+  try { return /rateLimitExceeded|userRateLimitExceeded|quotaExceeded|Quota exceeded/i.test(await r.clone().text()); }
+  catch { return false; }
+}
+async function errorHttp(r) {
+  let msg = '';
+  try { msg = (await r.json()).error?.message || ''; } catch { /* sin cuerpo */ }
+  const e = new Error(msg || `Error ${r.status}`);
+  e.status = r.status;
+  return e;
+}
+const espera = (i) => Math.min(CFG.esperaBaseMs * 2 ** i, CFG.esperaMaxMs) + Math.random() * 2000;
+
+async function gmail(ruta, params) {
+  const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/' + ruta);
+  for (const [k, v] of Object.entries(params || {})) if (v !== undefined && v !== '') url.searchParams.set(k, v);
+
+  for (let i = 0; i < CFG.maxIntentos; i++) {
+    if (S.cancelar) throw new Error('cancelado');
+    await asegurarToken();
+    let r;
+    try {
+      r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.token } });
+    } catch (e) {
+      if (i === CFG.maxIntentos - 1) throw new Error('Sin conexión con Gmail. Revisa tu internet.');
+      S.reintentos++;
+      const ms = espera(i);
+      log('inf', `Sin conexión. Reintentando en ${Math.round(ms / 1000)} s…`);
+      await dormir(ms);
+      continue;
+    }
+    if (r.ok) { await dormir(CFG.pausaLlamadaMs); return r.json(); }
+    if (r.status === 401) { S.expira = 0; continue; }
+    const reintentable = r.status === 429 || r.status >= 500 || (r.status === 403 && await esCuota(r));
+    if (!reintentable || i === CFG.maxIntentos - 1) throw await errorHttp(r);
+    S.reintentos++;
+    const ms = espera(i);
+    setEstado(`Gmail pidió ir más despacio. Reintento ${i + 1} en ${Math.round(ms / 1000)} s…`);
+    log('inf', `Límite de cuota de Gmail. Reintento ${i + 1} en ${Math.round(ms / 1000)} s.`);
+    await dormir(ms);
+  }
+  throw new Error('Gmail no respondió después de varios intentos.');
+}
+
+/* ══════════════════════════════════════════════════════════
+   BÚSQUEDA Y DESCARGA
+   ══════════════════════════════════════════════════════════ */
+function construirQuery(desde, hasta, json, pdf, extra) {
+  const tipos = [];
+  if (json) tipos.push('filename:.json');
+  if (pdf) tipos.push('filename:.pdf');
+  const fin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate() + 1); // «Hasta» incluye ese día
+  let q = `has:attachment (${tipos.join(' OR ')}) after:${epoch(desde)} before:${epoch(fin)}`;
+  if (extra) q += ' ' + extra;
+  return q;
+}
+
+async function listarCorreos(q) {
+  const ids = [];
+  let pageToken;
+  do {
+    const r = await gmail('messages', { q, maxResults: 500, pageToken });
+    (r.messages || []).forEach((m) => ids.push(m.id));
+    setEstado(`Buscando correos… ${ids.length} encontrado(s)`);
+    pageToken = r.nextPageToken;
+  } while (pageToken);
+  return ids;
+}
+
+function extraerAdjuntos(payload, quiereJson, quierePdf) {
+  const lista = [];
+  (function rec(partes) {
+    for (const p of partes || []) {
+      const nombre = p.filename || '';
+      const ext = (nombre.toLowerCase().match(/\.[a-z0-9]+$/) || [''])[0];
+      const tipo = ext === '.json' ? 'JSON' : ext === '.pdf' ? 'PDF' : null;
+      const quiere = (tipo === 'JSON' && quiereJson) || (tipo === 'PDF' && quierePdf);
+      const b = p.body || {};
+      if (nombre && quiere && (b.attachmentId || b.data)) {
+        lista.push({ nombre, tipo, attId: b.attachmentId, data: b.data, size: b.size || 0 });
+      }
+      if (p.parts) rec(p.parts);
+    }
+  })([payload]);
+  return lista;
+}
+
+/* Destino: carpeta del usuario o .zip */
+let zip = null;
+const rutasZip = new Map();
+
+async function tamanoExistente(sub, nombre) {
+  try { return (await (await sub.getFileHandle(nombre)).getFile()).size; }
+  catch (e) { if (e && e.name === 'NotFoundError') return null; throw e; }
+}
+async function resolverDestino(tipo, nombre, size, msgId) {
+  const limpio = limpiarNombre(nombre);
+  const alt = variante(limpio, msgId);
+  if (zip) {
+    for (const n of [limpio, alt]) {
+      const ruta = `${tipo}/${n}`;
+      if (!rutasZip.has(ruta)) return { tipo, nombre: n, ruta, omitir: false };
+      if (size && rutasZip.get(ruta) === size) return { tipo, nombre: n, ruta, omitir: true };
+    }
+    const [b, e] = partirNombre(alt);
+    let k = 2;
+    while (rutasZip.has(`${tipo}/${b}_${k}${e}`)) k++;
+    return { tipo, nombre: `${b}_${k}${e}`, ruta: `${tipo}/${b}_${k}${e}`, omitir: false };
+  }
+  const sub = await S.dir.getDirectoryHandle(tipo, { create: true });
+  for (const n of [limpio, alt]) {
+    const ex = await tamanoExistente(sub, n);
+    if (ex === null) return { sub, tipo, nombre: n, omitir: false };
+    if (size && ex === size) return { sub, tipo, nombre: n, omitir: true };
+  }
+  return { sub, tipo, nombre: alt, omitir: false };
+}
+async function guardar(dest, bytes) {
+  if (zip) {
+    zip.file(dest.ruta, bytes);
+    rutasZip.set(dest.ruta, bytes.length);
+    return;
+  }
+  const fh = await dest.sub.getFileHandle(dest.nombre, { create: true });
+  const w = await fh.createWritable();
+  await w.write(bytes);
+  await w.close();
+}
+
+async function procesarCorreo(id, st, quiereJson, quierePdf) {
+  const msg = await gmail('messages/' + id, { format: 'full' });
+  const hs = (msg.payload && msg.payload.headers) || [];
+  const asunto = ((hs.find((h) => h.name.toLowerCase() === 'subject') || {}).value || '(sin asunto)').slice(0, 50);
+  const adjuntos = extraerAdjuntos(msg.payload, quiereJson, quierePdf);
+  let ok = true;
+
+  for (const a of adjuntos) {
+    try {
+      const dest = await resolverDestino(a.tipo, a.nombre, a.size, id);
+      if (dest.omitir) {
+        st.omitidos++;
+        log('ya', `${a.tipo} ya existía: ${dest.nombre}`);
+        continue;
+      }
+      let b64 = a.data;
+      if (!b64) b64 = (await gmail(`messages/${id}/attachments/${a.attId}`)).data;
+      const bytes = b64urlABytes(b64);
+      await guardar(dest, bytes);
+      if (a.tipo === 'JSON') st.json++; else st.pdf++;
+      log('ok', `${a.tipo}  ${dest.nombre}  —  ${asunto}`);
+    } catch (e) {
+      if (e.message === 'cancelado') throw e;
+      ok = false;
+      st.errores++;
+      log('err', `${a.nombre}: ${String(e.message || e).slice(0, 140)}`);
+    }
+  }
+  return ok;
+}
+
+async function generarZip(st) {
+  setEstado('Preparando el archivo .zip…');
+  const blob = await zip.generateAsync(
+    { type: 'blob', compression: 'DEFLATE' },
+    (m) => setEstado(`Preparando el archivo .zip… ${Math.round(m.percent)} %`)
+  );
+  if (zipUrl) URL.revokeObjectURL(zipUrl);
+  zipUrl = URL.createObjectURL(blob);
+  const nombre = `adjuntos-gmail_${$('desde').value}_a_${$('hasta').value}.zip`;
+  const a = $('btn-zip');
+  a.href = zipUrl; a.download = nombre; a.hidden = false;
+  a.click();
+}
+
+async function iniciar() {
+  if (S.ejecutando || faltante()) return;
+  const json = $('t-json').checked, pdf = $('t-pdf').checked;
+  const modo = modoDestino();
+  if (modo === 'zip' && typeof JSZip === 'undefined') {
+    $('progreso').hidden = false;
+    setEstado('No se pudo cargar la herramienta de .zip. Revisa tu internet y recarga la página.', 'error');
+    return;
+  }
+  const query = construirQuery(parseISO($('desde').value), parseISO($('hasta').value), json, pdf, $('filtro').value.trim());
+
+  zip = modo === 'zip' ? new JSZip() : null;
+  rutasZip.clear();
+  S.ejecutando = true; S.cancelar = false; S.reintentos = 0;
+  const st = { json: 0, pdf: 0, omitidos: 0, errores: 0, revisados: 0, total: 0 };
+
+  $('progreso').hidden = false;
+  $('log').textContent = '';
+  $('btn-zip').hidden = true;
+  $('renovar').hidden = true;
+  $('btn-cancelar').hidden = false;
+  $('btn-cancelar').textContent = 'Cancelar';
+  actualizarProgreso(st);
+  refrescarBoton();
+  setEstado('Buscando correos…');
+  if ($('progreso').scrollIntoView) $('progreso').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch { /* opcional */ }
+
+  let cancelado = false, fallo = '';
+  try {
+    const ids = await listarCorreos(query);
+    st.total = ids.length;
+    if (!ids.length) {
+      setEstado('No se encontraron correos con esos adjuntos en el periodo elegido.');
+    } else {
+      for (const id of ids) {
+        setEstado('Descargando adjuntos…');
+        await procesarCorreo(id, st, json, pdf);
+        st.revisados++;
+        actualizarProgreso(st);
+        await dormir(CFG.pausaCorreoMs);
+      }
+    }
+  } catch (e) {
+    if (e.message === 'cancelado') cancelado = true; else fallo = e.message || String(e);
+  }
+
+  $('renovar').hidden = true;
+  $('btn-cancelar').hidden = true;
+  actualizarProgreso(st);
+
+  try {
+    if (zip && (st.json + st.pdf) > 0) await generarZip(st);
+  } catch (e) {
+    fallo = fallo || 'No se pudo crear el .zip: ' + (e.message || e);
+  }
+
+  const nuevos = st.json + st.pdf;
+  const destinoTxt = zip ? 'en el .zip' : `en la carpeta «${S.dir.name}»`;
+  if (fallo) {
+    setEstado(`Se detuvo: ${fallo}` + (nuevos ? ` Lo ya descargado quedó guardado ${destinoTxt}.` : ''), 'error');
+  } else if (cancelado) {
+    setEstado(`Cancelado. Se guardaron ${nuevos} archivo(s) nuevo(s) ${destinoTxt}.`);
+  } else if (st.total && st.errores) {
+    setEstado(`Terminó con ${st.errores} error(es). Vuelve a presionar «Descargar adjuntos»` + (zip ? '.' : ': los archivos ya guardados se omiten.'), 'error');
+  } else if (st.total) {
+    setEstado(`Listo. ${nuevos} archivo(s) nuevo(s) ${destinoTxt}` + (st.omitidos ? `; ${st.omitidos} ya existían.` : '.'), 'listo');
+  }
+  if (S.reintentos) log('inf', `Reintentos por límite de cuota o red: ${S.reintentos}.`);
+
+  try { if (wakeLock) await wakeLock.release(); } catch { /* nada */ }
+  wakeLock = null;
+  S.ejecutando = false;
+  refrescarBoton();
+}
+
+/* ══════════════════════════════════════════════════════════
+   EVENTOS
+   ══════════════════════════════════════════════════════════ */
+$('btn-conectar').addEventListener('click', () => conectar(''));
+$('btn-cambiar').addEventListener('click', () => conectar('select_account'));
+$('btn-salir').addEventListener('click', desconectar);
+$('btn-iniciar').addEventListener('click', iniciar);
+$('btn-cancelar').addEventListener('click', () => { S.cancelar = true; $('btn-cancelar').textContent = 'Cancelando…'; });
+
+document.querySelectorAll('input[name="preset"]').forEach((r) => r.addEventListener('change', aplicarPreset));
+['desde', 'hasta'].forEach((id) => $(id).addEventListener('change', () => { $('preset-custom').checked = true; actualizarResumen(); }));
+['t-json', 't-pdf'].forEach((id) => $(id).addEventListener('change', refrescarBoton));
+document.querySelectorAll('input[name="destino"]').forEach((r) => r.addEventListener('change', refrescarBoton));
+
+$('btn-carpeta').addEventListener('click', async () => {
+  const nota = $('nota-carpeta');
+  nota.hidden = true;
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+    S.dir = h;
+    $('carpeta-nombre').textContent = h.name;
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    nota.textContent = 'No se pudo usar esa carpeta. Crea una carpeta nueva (por ejemplo, dentro de Documentos) y elígela; Chrome no permite algunas carpetas del sistema, como Descargas.';
+    nota.hidden = false;
+  }
+  refrescarBoton();
+});
+
+window.addEventListener('beforeunload', (e) => {
+  if (S.ejecutando) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ══════════════════════════════════════════════════════════
+   ARRANQUE
+   ══════════════════════════════════════════════════════════ */
+if (!configurado) { $('aviso-config').hidden = false; $('btn-conectar').disabled = true; }
+if (!puedeCarpeta) {
+  $('dest-carpeta').disabled = true;
+  $('dest-zip').checked = true;
+  $('btn-carpeta').disabled = true;
+  const nota = $('nota-carpeta');
+  nota.textContent = 'Tu navegador no permite elegir una carpeta (eso solo funciona en Chrome o Edge en computadora). Usa el .zip.';
+  nota.hidden = false;
+}
+aplicarPreset();
+mostrarSesion();
+iniciarGoogle();
+})();
+</script>
+</body>
+</html>
